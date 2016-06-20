@@ -1,18 +1,22 @@
 package urldispatch
 
-import "fmt"
+import (
+	"fmt"
+	"net/url"
+	"strings"
+)
 
 // TODO remove this test.
-func Test(dispathPath string, queryPath string) {
+func Test(dispatchURL *url.URL, u *url.URL) {
 
 	rootSeg := segment{}
 
-	err := rootSeg.AddDispatchPath(dispathPath)
+	err := rootSeg.AddDispatchPath(dispatchURL)
 	if err != nil {
 		panic(err)
 	}
 
-	args, err := rootSeg.dispatch(queryPath)
+	args, err := rootSeg.Dispatch(u)
 	if err != nil {
 		panic(err)
 	}
@@ -20,8 +24,14 @@ func Test(dispathPath string, queryPath string) {
 	fmt.Printf("args: %v", args)
 }
 
-func (s *segment) AddDispatchPath(dispatchPath string) error {
-	segs, qParamNames, err := tokenize(dispatchPath)
+func (s *segment) AddDispatchPath(dispatchURL *url.URL) error {
+
+	dispatchPath := dispatchURL.Path
+	if strings.HasPrefix(dispatchPath, "/") {
+		dispatchPath = dispatchPath[1:]
+	}
+
+	segs, qParamNames, err := tokenize(dispatchPath, dispatchURL.RawQuery)
 	if err != nil {
 		return err
 	}
@@ -34,8 +44,14 @@ func (s *segment) AddDispatchPath(dispatchPath string) error {
 	return nil
 }
 
-func (s *segment) Dispatch(queryPath string) (args, error) {
-	return s.dispatch(queryPath)
+func (s *segment) Dispatch(u *url.URL) (args, error) {
+
+	path := u.Path
+	if strings.HasPrefix(path, "/") {
+		path = path[1:]
+	}
+
+	return s.dispatch(path, u.RawQuery)
 }
 
 func printSegment(s segment, intend int) {

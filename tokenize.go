@@ -5,18 +5,13 @@ import (
 	"strings"
 )
 
-func tokenize(path string) ([]segment, []string, error) {
+func tokenize(path string, rawQuery string) ([]segment, []string, error) {
 
 	argCache := map[string]bool{}
 	var segments = []segment{}
 	var queryParams []string
 
-	sp := strings.Split(path, "?")
-	path = sp[0]
-	if len(sp) == 2 {
-		q := sp[1]
-		queryParams = strings.Split(q, "&")
-	}
+	queryParams = strings.Split(rawQuery, "&")
 
 	poke := func() *segment {
 		idx := len(segments) - 1

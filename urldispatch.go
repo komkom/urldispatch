@@ -54,30 +54,20 @@ func (s *segment) addSegments(segments []segment, queryParamNames []string) erro
 	return nil
 }
 
-func (s *segment) dispatch(queryPath string) (args, error) {
-	sp := strings.Split(queryPath, "?")
+func (s *segment) dispatch(path string, query string) (args, error) {
 	cargs := args{}
 
-	if len(sp) > 2 {
-		return cargs, errors.New("invalid query: " + queryPath)
+	pargs, err := s.dispatchPath(strings.Split(path, "/"))
+	if err != nil {
+		return pargs, err
 	}
+	cargs = cargs.merge(pargs)
 
-	if len(sp) > 0 {
-
-		pargs, err := s.dispatchPath(strings.Split(sp[0], "/"))
-		if err != nil {
-			return pargs, err
-		}
-		cargs = cargs.merge(pargs)
+	qargs, err := s.dispatchQuery(query, cargs)
+	if err != nil {
+		return cargs, err
 	}
-
-	if len(sp) > 1 {
-		qargs, err := s.dispatchQuery(sp[1], cargs)
-		if err != nil {
-			return cargs, err
-		}
-		cargs = cargs.merge(qargs)
-	}
+	cargs = qargs
 
 	return cargs, nil
 }
