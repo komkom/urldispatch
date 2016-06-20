@@ -3,17 +3,18 @@ package urldispatch
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 type segment struct {
-	hash        string
-	value       string
-	paramNames  []string
-	arrayName   string
-	paramValues []string
-	arrayValues []string
-	next        []segment
-	tag         string
+	value           string
+	paramNames      []string
+	queryParamNames []string
+	arrayName       string
+	paramValues     []string
+	arrayValues     []string
+	next            []segment
+	tag             string
 }
 
 type keyValue struct {
@@ -41,38 +42,74 @@ func (a args) merge(toAppend args) args {
 	return a
 }
 
-func rootSegment() segment {
-	return segment{}
-}
-
-func (s *segment) addSegments(segments []segment) error {
-	preparedSegs, err := s.prepare(segments)
+func (s *segment) addSegments(segments []segment, queryParamNames []string) error {
+	err := s.addable(segments)
 	if err != nil {
 		return err
 	}
 
-	s.insertSegments(preparedSegs)
+	s.queryParamNames = queryParamNames
+
+	s.insertSegments(segments)
 	return nil
 }
 
-func (s *segment) dispatch(path []string) (args, error) {
+func (s *segment) dispatch(queryPath string) (args, error) {
+	sp := strings.Split(queryPath, "?")
+	cargs := args{}
+
+	if len(sp) > 2 {
+		return cargs, errors.New("invalid query: " + queryPath)
+	}
+
+	if len(sp) > 0 {
+
+		pargs, err := s.dispatchPath(strings.Split(sp[0], "/"))
+		if err != nil {
+			return pargs, err
+		}
+		cargs = cargs.merge(pargs)
+	}
+
+	if len(sp) > 1 {
+		qargs, err := s.dispatchQuery(sp[1], cargs)
+		if err != nil {
+			return cargs, err
+		}
+		cargs = cargs.merge(qargs)
+	}
+
+	return cargs, nil
+}
+
+func (s *segment) dispatchPath(path []string) (args, error) {
 
 	cargs := args{}
 
-	for _, pathSeg := range path {
+	for len(path) > 0 {
+		pathSeg := path[0]
+
 		for _, cs := range s.next {
+
 			if cs.value == path[0] {
-				ccargs, err := cs.dispatch(path[1:])
+				ccargs, err := cs.dispatchPath(path[1:])
 				if err != nil {
-					return cargs.merge(ccargs), err
+					return ccargs, err
+				} else {
+
+					return cargs.merge(ccargs), nil
 				}
 			}
 		}
 
-		cargs, err := s.merge(pathSeg, cargs)
+		margs, err := s.merge(pathSeg, cargs)
+
 		if err != nil {
 			return cargs, err
 		}
+
+		cargs = margs
+		path = path[1:]
 	}
 
 	// check if recursion needs to terminate.
@@ -89,6 +126,27 @@ func (s *segment) dispatch(path []string) (args, error) {
 	return args{}, errors.New("path has len 0.")
 }
 
+func (s *segment) dispatchQuery(query string, cargs args) (args, error) {
+	kvs := strings.Split(query, "&")
+
+	for len(kvs) > 0 {
+		kv := strings.Split(kvs[0], "=")
+		if len(kv) != 2 {
+			return cargs, errors.New("query syntax invalid")
+		}
+
+		for _, qp := range s.queryParamNames {
+			if qp == kv[0] {
+				cargs.params = append(cargs.params, keyValue{key: qp, value: kv[1]})
+			}
+		}
+
+		kvs = kvs[1:]
+	}
+
+	return cargs, nil
+}
+
 func (s segment) merge(arg string, cargs args) (args, error) {
 	cpCount := len(cargs.params)
 
@@ -103,10 +161,12 @@ func (s segment) merge(arg string, cargs args) (args, error) {
 
 		// add a new offset if needed
 		lastOffsetIdx := len(cargs.arrayOffsets) - 1
-		if lastOffsetIdx > 0 {
+		if lastOffsetIdx >= 0 {
 			if cargs.arrayOffsets[lastOffsetIdx].key != s.arrayName {
 				cargs.arrayOffsets = append(cargs.arrayOffsets, offset{key: s.arrayName, length: 0})
 			}
+		} else {
+			cargs.arrayOffsets = append(cargs.arrayOffsets, offset{key: s.arrayName, length: 0})
 		}
 
 		// fix offset
@@ -119,73 +179,43 @@ func (s segment) merge(arg string, cargs args) (args, error) {
 		return cargs, nil
 	}
 
-	return args{}, errors.New(fmt.Sprintf("merge failed for %v, with %v", s.hash, arg))
+	return args{}, errors.New(fmt.Sprintf("merge failed for %v, with %v", s.value, arg))
 }
 
-func hash(s segment) (string, error) {
-
-	if len(s.value) == 0 {
-		return ``, errors.New(`value has len 0.`)
-	}
-
-	return fmt.Sprintf("%v#%v#%v", s.value, len(s.paramNames), len(s.arrayName) > 0), nil
-}
-
-func (s *segment) prepare(segments []segment) ([]segment, error) {
-
-	ok := checkUniquenessOfParamNames(segments)
-	if !ok {
-		return nil, errors.New("param names not unique.")
-	}
+func (s *segment) addable(segments []segment) error {
 
 	if len(segments) > 0 {
 		nseg := segments[0]
-		h, err := hash(nseg)
-		if err != nil {
-			return nil, err
-		}
-
-		nseg.hash = h
-		nseg.next = []segment{}
 
 		for _, cs := range s.next {
-			if cs.hash == nseg.hash {
-				rsegs, err := cs.prepare(segments[1:])
-				if err != nil {
-					return nil, err
-				}
-
-				return append([]segment{cs}, rsegs...), nil
+			if cs.value == nseg.value {
+				return cs.addable(segments[1:])
 			}
 		}
 
-		return []segment{nseg}, nil
+		return nil
 	}
 
-	return nil, errors.New("prepare failed.")
-}
-
-// TODO implement.
-func checkUniquenessOfParamNames(segments []segment) bool {
-	return true
+	return errors.New("addable failed.")
 }
 
 func (s *segment) insertSegments(segments []segment) {
+
 	if len(segments) > 0 {
 		nseg := segments[0]
-		if len(nseg.hash) == 0 {
-			panic(errors.New("hash has len 0."))
-		}
 
 		for _, cs := range s.next {
-			if cs.hash == nseg.hash {
+			if cs.value == nseg.value {
+
 				cs.insertSegments(segments[1:])
 				return
 			}
 		}
 
 		s.next = append(s.next, nseg)
-		nseg.insertSegments(segments[1:])
+
+		// insert from the appended struct.
+		s.next[len(s.next)-1].insertSegments(segments[1:])
 		return
 	}
 }
