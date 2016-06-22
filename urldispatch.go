@@ -2,191 +2,202 @@ package urldispatch
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 )
 
+const (
+	nullptr = index(^uint8(0))
+)
+
 type segment struct {
-	value           string
-	paramNames      []string
-	queryParamNames []string
-	arrayName       string
-	paramValues     []string
-	arrayValues     []string
-	next            []segment
-	tag             string
-}
-
-type keyValue struct {
-	key   string
 	value string
+	amap  argsMap
+	next  []segment
 }
 
-type offset struct {
-	key    string
-	length int
+type args2 struct {
+	psection indexes
+	params   []string
+	asection indexes
+	array    []string
 }
 
-type args struct {
-	tag          string
-	params       []keyValue
-	arrayOffsets []offset
-	arrayValues  []string
+type outargs struct {
+	amap argsMap
+	ar   args2
 }
 
-func (a args) merge(toAppend args) args {
-
-	a.params = append(a.params, toAppend.params...)
-	a.arrayOffsets = append(a.arrayOffsets, toAppend.arrayOffsets...)
-	a.arrayValues = append(a.arrayValues, toAppend.arrayValues...)
-	return a
+func (o outargs) paramCount() int {
+	return len(o.amap.params)
 }
 
-func (s *segment) addSegments(segments []segment, queryParamNames []string) error {
-	err := s.addable(segments)
+func (o outargs) value(index int) string {
+	return o.ar.params[o.ar.psection[index]]
+}
+
+func (o outargs) array(index int) []string {
+	sIdx := int(o.ar.asection[index])
+	end := len(o.ar.asection)
+	nextIdx := index + 1
+	if end > nextIdx {
+		end = int(o.ar.asection[index+1])
+	}
+
+	return o.ar.array[sIdx:end]
+}
+
+func (a *args2) appendParamValue(value string) {
+
+	pIdx := index(len(a.params))
+
+	a.params = append(a.params, value)
+	a.psection = append(a.psection, pIdx)
+}
+
+func (a *args2) appendArrayValue(value string) {
+	a.array = append(a.array, value)
+}
+
+func (a *args2) nextArray() {
+	aIdx := index(len(a.array))
+	a.asection = append(a.asection, aIdx)
+}
+
+func (a *args2) addNullPtrParams(count index) {
+
+	for i := index(0); i < count; i++ {
+		// point to the largest index.
+		a.psection = append(a.psection, nullptr)
+	}
+}
+
+func (s *segment) addRoute(segs []segment) error {
+
+	if len(segs) > 0 {
+
+		refmap := segs[0].amap
+		for _, s := range segs {
+			if !s.amap.eq(refmap) {
+				return errors.New("amaps on the segments are not equal.")
+			}
+		}
+
+		err := s.addable2(segs, refmap, 0)
+		if err != nil {
+			return err
+		}
+
+		// insert the segments
+		s.insertSegments(segs)
+	}
+
+	return nil
+}
+
+func (s *segment) dispatchPath(pathSegs []string, ar args2, idx int) (outargs, error) {
+
+	var pIdx index
+
+	for len(pathSegs) > 0 {
+		ps := pathSegs[0]
+
+		for _, cs := range s.next {
+			if cs.value == ps {
+
+				pCount := s.amap.psections[idx]
+
+				// fix the array args
+				ar.addNullPtrParams(pCount - pIdx)
+				ar.nextArray()
+
+				return cs.dispatchPath(pathSegs[1:], ar, idx+1)
+			}
+		}
+
+		// if there is room for another param.
+		hasRoomForParam, err := s.amap.psections.isItemAtIndexBigger(idx, pIdx)
+		if err != nil {
+			return outargs{}, err
+		}
+
+		if hasRoomForParam {
+			ar.appendParamValue(ps)
+			pIdx += 1
+			pathSegs = pathSegs[1:]
+
+		} else if s.amap.asections[idx] > 0 {
+			// has room for another array item.
+			ar.appendArrayValue(ps)
+			pathSegs = pathSegs[1:]
+		} else {
+			return outargs{}, errors.New("param overflow with segment:" + ps)
+		}
+	}
+
+	if idx == 0 {
+		return outargs{}, errors.New("nothing to dispatch.")
+	} else {
+		return outargs{amap: s.amap, ar: ar}, nil
+	}
+}
+
+func (s *segment) dispatchQuery(query string, am argsMap, ar args2, idx index) (args2, error) {
+
+	pc := index(len(am.params)) - idx
+	ar.addNullPtrParams(pc)
+
+	kvs := strings.Split(query, "&")
+	for _, rkv := range kvs {
+		kv := strings.Split(rkv, "=")
+		if len(kv) != 2 {
+			return ar, errors.New("invalid query")
+		}
+
+		for i := idx; i < pc; i++ {
+			if kv[0] == am.params[i] {
+
+				if ar.psection[i] != nullptr {
+					ar.psection[i] = index(len(ar.params))
+					ar.params = append(ar.params, kv[1])
+					continue
+				}
+			}
+		}
+	}
+
+	return ar, nil
+}
+
+func (s segment) addable2(segs []segment, amap argsMap, index int) error {
+
+	if len(segs) > 0 {
+		for _, cs := range s.next {
+			cseg := segs[0]
+			if cs.value == cseg.value {
+
+				err := cs.ifParamsEqualGetNext(cseg, amap, index)
+				if err != nil {
+					return err
+				}
+
+				return cs.addable2(segs[1:], amap, index+1)
+			}
+		}
+	}
+	return nil
+}
+
+func (s segment) ifParamsEqualGetNext(other segment, amap argsMap, index int) error {
+	eq, err := s.amap.compareAtIndex(amap, index)
 	if err != nil {
 		return err
 	}
 
-	s.queryParamNames = queryParamNames
+	if !eq {
+		return errors.New("segment is equal but params differ.")
+	}
 
-	s.insertSegments(segments)
 	return nil
-}
-
-func (s *segment) dispatch(path string, query string) (args, error) {
-	cargs := args{}
-
-	pargs, err := s.dispatchPath(strings.Split(path, "/"))
-	if err != nil {
-		return pargs, err
-	}
-	cargs = cargs.merge(pargs)
-
-	qargs, err := s.dispatchQuery(query, cargs)
-	if err != nil {
-		return cargs, err
-	}
-	cargs = qargs
-
-	return cargs, nil
-}
-
-func (s *segment) dispatchPath(path []string) (args, error) {
-
-	cargs := args{}
-
-	for len(path) > 0 {
-		pathSeg := path[0]
-
-		for _, cs := range s.next {
-
-			if cs.value == path[0] {
-				ccargs, err := cs.dispatchPath(path[1:])
-				if err != nil {
-					return ccargs, err
-				} else {
-
-					return cargs.merge(ccargs), nil
-				}
-			}
-		}
-
-		margs, err := s.merge(pathSeg, cargs)
-
-		if err != nil {
-			return cargs, err
-		}
-
-		cargs = margs
-		path = path[1:]
-	}
-
-	// check if recursion needs to terminate.
-	if len(path) == 0 {
-		if s.next == nil {
-			// success dispatch candidate found.
-			cargs.tag = s.tag
-			return cargs, nil
-		} else {
-			return cargs, errors.New("not the final segment.")
-		}
-	}
-
-	return args{}, errors.New("path has len 0.")
-}
-
-func (s *segment) dispatchQuery(query string, cargs args) (args, error) {
-	kvs := strings.Split(query, "&")
-
-	for len(kvs) > 0 {
-		kv := strings.Split(kvs[0], "=")
-		if len(kv) != 2 {
-			return cargs, errors.New("query syntax invalid")
-		}
-
-		for _, qp := range s.queryParamNames {
-			if qp == kv[0] {
-				cargs.params = append(cargs.params, keyValue{key: qp, value: kv[1]})
-			}
-		}
-
-		kvs = kvs[1:]
-	}
-
-	return cargs, nil
-}
-
-func (s segment) merge(arg string, cargs args) (args, error) {
-	cpCount := len(cargs.params)
-
-	if len(s.paramNames) > cpCount {
-
-		cargs.params = append(cargs.params, keyValue{key: s.paramNames[cpCount], value: arg})
-
-		return cargs, nil
-	}
-
-	if len(s.arrayName) > 0 {
-
-		// add a new offset if needed
-		lastOffsetIdx := len(cargs.arrayOffsets) - 1
-		if lastOffsetIdx >= 0 {
-			if cargs.arrayOffsets[lastOffsetIdx].key != s.arrayName {
-				cargs.arrayOffsets = append(cargs.arrayOffsets, offset{key: s.arrayName, length: 0})
-			}
-		} else {
-			cargs.arrayOffsets = append(cargs.arrayOffsets, offset{key: s.arrayName, length: 0})
-		}
-
-		// fix offset
-		offestIdx := len(cargs.arrayOffsets) - 1
-		cargs.arrayOffsets[offestIdx].length += 1
-
-		// add argument.
-		cargs.arrayValues = append(cargs.arrayValues, arg)
-
-		return cargs, nil
-	}
-
-	return args{}, errors.New(fmt.Sprintf("merge failed for %v, with %v", s.value, arg))
-}
-
-func (s *segment) addable(segments []segment) error {
-
-	if len(segments) > 0 {
-		nseg := segments[0]
-
-		for _, cs := range s.next {
-			if cs.value == nseg.value {
-				return cs.addable(segments[1:])
-			}
-		}
-
-		return nil
-	}
-
-	return errors.New("addable failed.")
 }
 
 func (s *segment) insertSegments(segments []segment) {

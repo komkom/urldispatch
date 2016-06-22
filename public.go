@@ -1,7 +1,6 @@
 package urldispatch
 
 import (
-	"fmt"
 	"net/url"
 	"strings"
 )
@@ -9,21 +8,80 @@ import (
 // TODO remove this test.
 func Test(dispatchURL *url.URL, u *url.URL) {
 
-	rootSeg := segment{}
-
-	err := rootSeg.AddDispatchPath(dispatchURL)
+	root := segment{}
+	err := root.AddRoute(dispatchURL)
 	if err != nil {
 		panic(err)
 	}
 
-	args, err := rootSeg.Dispatch(u)
-	if err != nil {
-		panic(err)
-	}
+	/*
+		rootSeg := segment{}
 
-	fmt.Printf("args: %v", args)
+		err := rootSeg.AddDispatchPath(dispatchURL)
+		if err != nil {
+			panic(err)
+		}
+
+		args, err := rootSeg.Dispatch(u)
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Printf("args: %v", args)
+	*/
 }
 
+func (s *segment) Dispatch(dispatch *url.URL) (outargs, error) {
+	dispatchPath := dispatch.Path
+	dispatchQuery := dispatch.RawQuery
+
+	ar := args2{}
+	oa, err := s.dispatchPath(strings.Split(dispatchPath, "/"), ar, 0)
+	if err != nil {
+		return oa, err
+	}
+
+	ar, err = s.dispatchQuery(dispatchQuery, oa.amap, oa.ar, index(len(oa.ar.params)))
+	if err != nil {
+		return outargs{}, err
+	}
+
+	oa.ar = ar
+	return oa, nil
+}
+
+func (s *segment) AddRoute(route *url.URL) error {
+
+	routePath := route.Path
+	if strings.HasPrefix(routePath, "/") {
+		routePath = routePath[1:]
+	}
+
+	segs, err := parse(routePath, route.RawQuery)
+	if err != nil {
+		return err
+	}
+
+	err = s.addRoute(segs)
+	if err != nil {
+		return err
+	}
+
+	//fmt.Printf("____segs \n%v\n ___amap\n%v\n", segs, amap)
+	//fmt.Printf("___m_ %v\n\n", amap)
+
+	//fmt.Printf("___d_ %v\n\n", s)
+
+	/*
+		err = s.addSegments(segs, qParamNames)
+		if err != nil {
+			return err
+		}
+	*/
+	return nil
+}
+
+/*
 func (s *segment) AddDispatchPath(dispatchURL *url.URL) error {
 
 	dispatchPath := dispatchURL.Path
@@ -43,7 +101,9 @@ func (s *segment) AddDispatchPath(dispatchURL *url.URL) error {
 
 	return nil
 }
+*/
 
+/*
 func (s *segment) Dispatch(u *url.URL) (args, error) {
 
 	path := u.Path
@@ -54,6 +114,9 @@ func (s *segment) Dispatch(u *url.URL) (args, error) {
 	return s.dispatch(path, u.RawQuery)
 }
 
+*/
+
+/*
 func printSegment(s segment, intend int) {
 
 	intendAction := func(intend int) string {
@@ -70,3 +133,4 @@ func printSegment(s segment, intend int) {
 		printSegment(cs, intend+1)
 	}
 }
+*/
