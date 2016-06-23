@@ -3,6 +3,7 @@ package urldispatch
 import (
 	"errors"
 	"strings"
+	"unicode/utf8"
 )
 
 type index uint8
@@ -47,7 +48,7 @@ func (i indexes) eq(other indexes) bool {
 }
 
 func (i indexes) isItemAtIndexBigger(index int, toCompare index) (bool, error) {
-	if len(i) > index {
+	if len(i) <= index {
 		return false, errors.New("paramAppendable index out of bounds.")
 	}
 
@@ -114,7 +115,23 @@ func parse(path string, rawQuery string) ([]segment, error) {
 
 		cseg := poke()
 
-		if strings.HasPrefix(item, ":") {
+		if strings.HasPrefix(item, ":") && strings.HasSuffix(item, "...") {
+			if cseg == nil {
+				return nil, errors.New("trying to insert root array.")
+			}
+
+			pn := item[2 : utf8.RuneCountInString(item)-3]
+
+			err := cacheParam(pn)
+			if err != nil {
+				return nil, err
+			}
+
+			amap.arrays = append(amap.arrays, pn)
+			amap.asections.incrLast()
+
+		} else if strings.HasPrefix(item, ":") {
+
 			if cseg == nil {
 				return nil, errors.New("trying to insert root param.")
 			}
@@ -131,19 +148,6 @@ func parse(path string, rawQuery string) ([]segment, error) {
 				return nil, err
 			}
 
-		} else if strings.HasPrefix(item, "l:") {
-			if cseg == nil {
-				return nil, errors.New("trying to insert root array.")
-			}
-
-			pn := item[2:]
-			err := cacheParam(pn)
-			if err != nil {
-				return nil, err
-			}
-
-			amap.arrays = append(amap.arrays, pn)
-			amap.asections.incrLast()
 		} else {
 			nseg := segment{value: item}
 			segments = append(segments, nseg)
@@ -167,6 +171,8 @@ func parse(path string, rawQuery string) ([]segment, error) {
 		amap.psections.incrLast()
 		amap.params = append(amap.params, qp)
 	}
+
+	//fmt.Printf("__amap2!\n %v\n", amap)
 
 	// add the amap to the segments.
 	for idx, _ := range segments {

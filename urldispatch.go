@@ -22,6 +22,7 @@ type args2 struct {
 	array    []string
 }
 
+/*
 type outargs struct {
 	amap argsMap
 	ar   args2
@@ -31,6 +32,7 @@ func (o outargs) paramCount() int {
 	return len(o.amap.params)
 }
 
+// TODO fix nullptr exp.
 func (o outargs) value(index int) string {
 	return o.ar.params[o.ar.psection[index]]
 }
@@ -45,6 +47,7 @@ func (o outargs) array(index int) []string {
 
 	return o.ar.array[sIdx:end]
 }
+*/
 
 func (a *args2) appendParamValue(value string) {
 
@@ -71,30 +74,60 @@ func (a *args2) addNullPtrParams(count index) {
 	}
 }
 
-func (s *segment) addRoute(segs []segment) error {
+func (d *Dispatcher) addRoute(segs []segment) error {
 
 	if len(segs) > 0 {
 
-		refmap := segs[0].amap
+		cseg := segs[0]
+		refmap := cseg.amap
+
+		// check if all the amaps are equal
 		for _, s := range segs {
 			if !s.amap.eq(refmap) {
 				return errors.New("amaps on the segments are not equal.")
 			}
 		}
 
-		err := s.addable2(segs, refmap, 0)
-		if err != nil {
-			return err
+		for _, seg := range d.segments {
+			if seg.value == segs[0].value {
+
+				err := seg.compareParams(refmap, 0)
+				if err != nil {
+					return err
+				}
+
+				return seg.addable2(segs[1:], refmap, 0)
+			}
 		}
 
 		// insert the segments
-		s.insertSegments(segs)
+		cseg.insertSegments(segs[1:])
+
+		d.segments = append(d.segments, cseg)
 	}
 
 	return nil
 }
 
-func (s *segment) dispatchPath(pathSegs []string, ar args2, idx int) (outargs, error) {
+func (d Dispatcher) dispatchPath(pathSegs []string) (Outargs, error) {
+
+	ar := args2{}
+
+	if len(pathSegs) > 0 {
+		pathSeg := pathSegs[0]
+
+		for _, s := range d.segments {
+			if s.value == pathSeg {
+				return s.dispatchPath(pathSegs[1:], ar, 0)
+			}
+		}
+	}
+
+	return Outargs{}, errors.New("nothing to dispatch.")
+}
+
+//TODO remove ptr.
+func (s *segment) dispatchPath(pathSegs []string, ar args2, idx int) (Outargs, error) {
 
 	var pIdx index
 
@@ -102,9 +135,10 @@ func (s *segment) dispatchPath(pathSegs []string, ar args2, idx int) (outargs, e
 		ps := pathSegs[0]
 
 		for _, cs := range s.next {
+
 			if cs.value == ps {
 
-				pCount := s.amap.psections[idx]
+				pCount := cs.amap.psections[idx]
 
 				// fix the array args
 				ar.addNullPtrParams(pCount - pIdx)
@@ -114,10 +148,12 @@ func (s *segment) dispatchPath(pathSegs []string, ar args2, idx int) (outargs, e
 			}
 		}
 
+		//fmt.Printf("____pidx  %v   __idx %v \n", pIdx, idx)
+
 		// if there is room for another param.
 		hasRoomForParam, err := s.amap.psections.isItemAtIndexBigger(idx, pIdx)
 		if err != nil {
-			return outargs{}, err
+			return Outargs{}, err
 		}
 
 		if hasRoomForParam {
@@ -130,18 +166,14 @@ func (s *segment) dispatchPath(pathSegs []string, ar args2, idx int) (outargs, e
 			ar.appendArrayValue(ps)
 			pathSegs = pathSegs[1:]
 		} else {
-			return outargs{}, errors.New("param overflow with segment:" + ps)
+			return Outargs{}, errors.New("param overflow with segment:" + ps)
 		}
 	}
 
-	if idx == 0 {
-		return outargs{}, errors.New("nothing to dispatch.")
-	} else {
-		return outargs{amap: s.amap, ar: ar}, nil
-	}
+	return Outargs{amap: s.amap, ar: ar}, nil
 }
 
-func (s *segment) dispatchQuery(query string, am argsMap, ar args2, idx index) (args2, error) {
+func dispatchQuery(query string, am argsMap, ar args2, idx index) (args2, error) {
 
 	pc := index(len(am.params)) - idx
 	ar.addNullPtrParams(pc)
@@ -175,7 +207,7 @@ func (s segment) addable2(segs []segment, amap argsMap, index int) error {
 			cseg := segs[0]
 			if cs.value == cseg.value {
 
-				err := cs.ifParamsEqualGetNext(cseg, amap, index)
+				err := cs.compareParams(amap, index)
 				if err != nil {
 					return err
 				}
@@ -187,7 +219,7 @@ func (s segment) addable2(segs []segment, amap argsMap, index int) error {
 	return nil
 }
 
-func (s segment) ifParamsEqualGetNext(other segment, amap argsMap, index int) error {
+func (s segment) compareParams(amap argsMap, index int) error {
 	eq, err := s.amap.compareAtIndex(amap, index)
 	if err != nil {
 		return err

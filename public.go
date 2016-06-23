@@ -1,19 +1,71 @@
 package urldispatch
 
 import (
+	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 )
 
+type Dispatcher struct {
+	segments []segment
+}
+
+type Outargs struct {
+	amap argsMap
+	ar   args2
+}
+
+func (o Outargs) ParamCount() int {
+	return len(o.amap.params)
+}
+
+func (o Outargs) Value(index int) (string, error) {
+
+	if len(o.ar.psection) <= index {
+		return ``, errors.New("value index out of bounds.")
+	}
+
+	idx := o.ar.psection[index]
+
+	if len(o.ar.params) <= int(idx) {
+		return ``, errors.New("value index out of bounds 2.")
+	}
+
+	return o.ar.params[idx], nil
+}
+
+func (o Outargs) Array(index int) ([]string, error) {
+
+	if len(o.ar.asection) <= index {
+		return nil, errors.New("value index out of bounds 2.")
+	}
+
+	sIdx := int(o.ar.asection[index])
+	end := len(o.ar.asection)
+	nextIdx := index + 1
+	if end > nextIdx {
+		end = int(o.ar.asection[index+1])
+	}
+
+	return o.ar.array[sIdx:end], nil
+}
+
 // TODO remove this test.
 func Test(dispatchURL *url.URL, u *url.URL) {
 
-	root := segment{}
-	err := root.AddRoute(dispatchURL)
+	d := Dispatcher{}
+	err := d.AddRoute(dispatchURL)
 	if err != nil {
 		panic(err)
 	}
 
+	oa, err := d.Dispatch(u)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("__args %v\n", oa.ar)
 	/*
 		rootSeg := segment{}
 
@@ -31,26 +83,32 @@ func Test(dispatchURL *url.URL, u *url.URL) {
 	*/
 }
 
-func (s *segment) Dispatch(dispatch *url.URL) (outargs, error) {
-	dispatchPath := dispatch.Path
-	dispatchQuery := dispatch.RawQuery
+func (d *Dispatcher) Dispatch(dispatch *url.URL) (Outargs, error) {
+	dispPath := dispatch.Path
+	dispQuery := dispatch.RawQuery
 
-	ar := args2{}
-	oa, err := s.dispatchPath(strings.Split(dispatchPath, "/"), ar, 0)
+	if strings.HasPrefix(dispPath, "/") {
+		dispPath = dispPath[1:]
+	}
+
+	oa, err := d.dispatchPath(strings.Split(dispPath, "/"))
 	if err != nil {
 		return oa, err
 	}
 
-	ar, err = s.dispatchQuery(dispatchQuery, oa.amap, oa.ar, index(len(oa.ar.params)))
-	if err != nil {
-		return outargs{}, err
+	if len(dispQuery) > 0 {
+		ar, err := dispatchQuery(dispQuery, oa.amap, oa.ar, index(len(oa.ar.params)))
+		if err != nil {
+			return Outargs{}, err
+		}
+
+		oa.ar = ar
 	}
 
-	oa.ar = ar
 	return oa, nil
 }
 
-func (s *segment) AddRoute(route *url.URL) error {
+func (d *Dispatcher) AddRoute(route *url.URL) error {
 
 	routePath := route.Path
 	if strings.HasPrefix(routePath, "/") {
@@ -62,75 +120,10 @@ func (s *segment) AddRoute(route *url.URL) error {
 		return err
 	}
 
-	err = s.addRoute(segs)
-	if err != nil {
-		return err
-	}
-
-	//fmt.Printf("____segs \n%v\n ___amap\n%v\n", segs, amap)
-	//fmt.Printf("___m_ %v\n\n", amap)
-
-	//fmt.Printf("___d_ %v\n\n", s)
-
-	/*
-		err = s.addSegments(segs, qParamNames)
-		if err != nil {
-			return err
-		}
-	*/
-	return nil
-}
-
-/*
-func (s *segment) AddDispatchPath(dispatchURL *url.URL) error {
-
-	dispatchPath := dispatchURL.Path
-	if strings.HasPrefix(dispatchPath, "/") {
-		dispatchPath = dispatchPath[1:]
-	}
-
-	segs, qParamNames, err := tokenize(dispatchPath, dispatchURL.RawQuery)
-	if err != nil {
-		return err
-	}
-
-	err = s.addSegments(segs, qParamNames)
+	err = d.addRoute(segs)
 	if err != nil {
 		return err
 	}
 
 	return nil
 }
-*/
-
-/*
-func (s *segment) Dispatch(u *url.URL) (args, error) {
-
-	path := u.Path
-	if strings.HasPrefix(path, "/") {
-		path = path[1:]
-	}
-
-	return s.dispatch(path, u.RawQuery)
-}
-
-*/
-
-/*
-func printSegment(s segment, intend int) {
-
-	intendAction := func(intend int) string {
-		intendString := ""
-		for i := 0; i < intend; i++ {
-			intendString += "\t"
-		}
-		return intendString
-	}
-
-	fmt.Println(intendAction(intend) + fmt.Sprintf("%v params:%v array:%v", s.value, s.paramNames, s.arrayName))
-
-	for _, cs := range s.next {
-		printSegment(cs, intend+1)
-	}
-}
-*/
