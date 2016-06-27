@@ -2,7 +2,6 @@ package urldispatch
 
 import (
 	"errors"
-	"fmt"
 	"net/url"
 	"strings"
 )
@@ -14,6 +13,57 @@ type Dispatcher struct {
 type Outargs struct {
 	amap argsMap
 	ar   args2
+}
+
+func (o Outargs) ParamWithName(name string) (string, error) {
+	idx := 0
+	pIdx := 0
+	ppIdx := index(0)
+
+	for pIdx < len(o.amap.psections) {
+
+		if o.amap.psections[pIdx] != 0 {
+			if o.amap.params[idx] == name {
+				return o.Value(idx)
+			}
+			idx += 1
+		}
+
+		ppIdx += 1
+
+		ok, err := o.amap.psections.isItemAtIndexBigger(pIdx, ppIdx)
+		if err != nil {
+			return ``, err
+		}
+
+		if !ok {
+			pIdx += 1
+			ppIdx = 0
+		}
+	}
+
+	return ``, errors.New("paramname not found.")
+}
+
+func (o Outargs) ArrayWithName(name string) ([]string, error) {
+	idx := 0
+	pIdx := 0
+
+	for pIdx < len(o.amap.asections) {
+
+		if o.amap.asections[pIdx] != 0 {
+
+			if o.amap.arrays[idx] == name {
+
+				return o.Array(pIdx)
+			}
+			idx += 1
+		}
+
+		pIdx += 1
+	}
+
+	return nil, errors.New("paramname not found.")
 }
 
 func (o Outargs) ParamCount() int {
@@ -29,7 +79,7 @@ func (o Outargs) Value(index int) (string, error) {
 	idx := o.ar.psection[index]
 
 	if len(o.ar.params) <= int(idx) {
-		return ``, errors.New("value index out of bounds 2.")
+		return ``, errors.New("null ptr exception.")
 	}
 
 	return o.ar.params[idx], nil
@@ -42,45 +92,14 @@ func (o Outargs) Array(index int) ([]string, error) {
 	}
 
 	sIdx := int(o.ar.asection[index])
-	end := len(o.ar.asection)
+	end := len(o.ar.array)
+
 	nextIdx := index + 1
-	if end > nextIdx {
-		end = int(o.ar.asection[index+1])
+	if len(o.ar.asection) > nextIdx {
+		end = int(o.ar.asection[nextIdx])
 	}
 
 	return o.ar.array[sIdx:end], nil
-}
-
-// TODO remove this test.
-func Test(dispatchURL *url.URL, u *url.URL) {
-
-	d := Dispatcher{}
-	err := d.AddRoute(dispatchURL)
-	if err != nil {
-		panic(err)
-	}
-
-	oa, err := d.Dispatch(u)
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Printf("__args %v\n", oa.ar)
-	/*
-		rootSeg := segment{}
-
-		err := rootSeg.AddDispatchPath(dispatchURL)
-		if err != nil {
-			panic(err)
-		}
-
-		args, err := rootSeg.Dispatch(u)
-		if err != nil {
-			panic(err)
-		}
-
-		fmt.Printf("args: %v", args)
-	*/
 }
 
 func (d *Dispatcher) Dispatch(dispatch *url.URL) (Outargs, error) {

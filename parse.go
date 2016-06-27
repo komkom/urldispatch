@@ -91,7 +91,9 @@ func parse(path string, rawQuery string) ([]segment, error) {
 	var queryParams []string
 	amap := argsMap{}
 
-	queryParams = strings.Split(rawQuery, "&")
+	if len(rawQuery) > 0 {
+		queryParams = strings.Split(rawQuery, "&")
+	}
 
 	poke := func() *segment {
 		idx := len(segments) - 1
@@ -120,7 +122,7 @@ func parse(path string, rawQuery string) ([]segment, error) {
 				return nil, errors.New("trying to insert root array.")
 			}
 
-			pn := item[2 : utf8.RuneCountInString(item)-3]
+			pn := item[1 : utf8.RuneCountInString(item)-3]
 
 			err := cacheParam(pn)
 			if err != nil {
@@ -160,6 +162,7 @@ func parse(path string, rawQuery string) ([]segment, error) {
 	// check the query params
 	if len(queryParams) > 0 {
 		amap.psections = append(amap.psections, 0)
+
 	}
 
 	for _, qp := range queryParams {
@@ -171,8 +174,6 @@ func parse(path string, rawQuery string) ([]segment, error) {
 		amap.psections.incrLast()
 		amap.params = append(amap.params, qp)
 	}
-
-	//fmt.Printf("__amap2!\n %v\n", amap)
 
 	// add the amap to the segments.
 	for idx, _ := range segments {

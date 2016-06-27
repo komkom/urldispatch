@@ -22,33 +22,6 @@ type args2 struct {
 	array    []string
 }
 
-/*
-type outargs struct {
-	amap argsMap
-	ar   args2
-}
-
-func (o outargs) paramCount() int {
-	return len(o.amap.params)
-}
-
-// TODO fix nullptr exp.
-func (o outargs) value(index int) string {
-	return o.ar.params[o.ar.psection[index]]
-}
-
-func (o outargs) array(index int) []string {
-	sIdx := int(o.ar.asection[index])
-	end := len(o.ar.asection)
-	nextIdx := index + 1
-	if end > nextIdx {
-		end = int(o.ar.asection[index+1])
-	}
-
-	return o.ar.array[sIdx:end]
-}
-*/
-
 func (a *args2) appendParamValue(value string) {
 
 	pIdx := index(len(a.params))
@@ -118,6 +91,7 @@ func (d Dispatcher) dispatchPath(pathSegs []string) (Outargs, error) {
 
 		for _, s := range d.segments {
 			if s.value == pathSeg {
+				ar.nextArray()
 				return s.dispatchPath(pathSegs[1:], ar, 0)
 			}
 		}
@@ -126,8 +100,7 @@ func (d Dispatcher) dispatchPath(pathSegs []string) (Outargs, error) {
 	return Outargs{}, errors.New("nothing to dispatch.")
 }
 
-//TODO remove ptr.
-func (s *segment) dispatchPath(pathSegs []string, ar args2, idx int) (Outargs, error) {
+func (s segment) dispatchPath(pathSegs []string, ar args2, idx int) (Outargs, error) {
 
 	var pIdx index
 
@@ -148,8 +121,6 @@ func (s *segment) dispatchPath(pathSegs []string, ar args2, idx int) (Outargs, e
 			}
 		}
 
-		//fmt.Printf("____pidx  %v   __idx %v \n", pIdx, idx)
-
 		// if there is room for another param.
 		hasRoomForParam, err := s.amap.psections.isItemAtIndexBigger(idx, pIdx)
 		if err != nil {
@@ -157,6 +128,7 @@ func (s *segment) dispatchPath(pathSegs []string, ar args2, idx int) (Outargs, e
 		}
 
 		if hasRoomForParam {
+
 			ar.appendParamValue(ps)
 			pIdx += 1
 			pathSegs = pathSegs[1:]
@@ -179,16 +151,17 @@ func dispatchQuery(query string, am argsMap, ar args2, idx index) (args2, error)
 	ar.addNullPtrParams(pc)
 
 	kvs := strings.Split(query, "&")
+
 	for _, rkv := range kvs {
 		kv := strings.Split(rkv, "=")
 		if len(kv) != 2 {
 			return ar, errors.New("invalid query")
 		}
 
-		for i := idx; i < pc; i++ {
-			if kv[0] == am.params[i] {
+		for i := idx; i < pc+idx; i++ {
 
-				if ar.psection[i] != nullptr {
+			if kv[0] == am.params[i] {
+				if ar.psection[i] == nullptr {
 					ar.psection[i] = index(len(ar.params))
 					ar.params = append(ar.params, kv[1])
 					continue
