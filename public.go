@@ -106,9 +106,7 @@ func (d *Dispatcher) Dispatch(dispatch *url.URL) (Outargs, error) {
 	dispPath := dispatch.Path
 	dispQuery := dispatch.RawQuery
 
-	if strings.HasPrefix(dispPath, "/") {
-		dispPath = dispPath[1:]
-	}
+	dispPath = removeLeadingAndTrailingSlashes(dispPath)
 
 	oa, err := d.dispatchPath(strings.Split(dispPath, "/"))
 	if err != nil {
@@ -127,14 +125,12 @@ func (d *Dispatcher) Dispatch(dispatch *url.URL) (Outargs, error) {
 	return oa, nil
 }
 
-func (d *Dispatcher) AddRoute(route *url.URL) error {
+func (d *Dispatcher) AddRoute(route *url.URL, tag int) error {
 
 	routePath := route.Path
-	if strings.HasPrefix(routePath, "/") {
-		routePath = routePath[1:]
-	}
+	routePath = removeLeadingAndTrailingSlashes(routePath)
 
-	segs, err := parse(routePath, route.RawQuery)
+	segs, err := parse(routePath, route.RawQuery, tag)
 	if err != nil {
 		return err
 	}
@@ -145,4 +141,17 @@ func (d *Dispatcher) AddRoute(route *url.URL) error {
 	}
 
 	return nil
+}
+
+func removeLeadingAndTrailingSlashes(path string) string {
+
+	if strings.HasPrefix(path, "/") {
+		path = path[1:]
+	}
+
+	if strings.HasSuffix(path, "/") {
+		path = path[:len(path)-1]
+	}
+
+	return path
 }

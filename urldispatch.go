@@ -142,7 +142,11 @@ func (s segment) dispatchPath(pathSegs []string, ar args2, idx int) (Outargs, er
 		}
 	}
 
-	return Outargs{amap: s.amap, ar: ar}, nil
+	if len(s.next) > 0 {
+		return Outargs{}, errors.New("only partial dispatch.")
+	} else {
+		return Outargs{amap: s.amap, ar: ar}, nil
+	}
 }
 
 func dispatchQuery(query string, am argsMap, ar args2, idx index) (args2, error) {

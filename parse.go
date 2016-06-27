@@ -60,6 +60,7 @@ type argsMap struct {
 	params    params
 	asections indexes
 	arrays    params
+	tag       int
 }
 
 func (am *argsMap) incrLastPsection() error {
@@ -84,12 +85,13 @@ func (am argsMap) eq(other argsMap) bool {
 	return am.params.eq(other.params) && am.psections.eq(other.psections) && am.arrays.eq(other.arrays) && am.asections.eq(other.asections)
 }
 
-func parse(path string, rawQuery string) ([]segment, error) {
+func parse(path string, rawQuery string, tag int) ([]segment, error) {
 
 	argCache := map[string]bool{}
 	var segments = []segment{}
 	var queryParams []string
 	amap := argsMap{}
+	amap.tag = tag
 
 	if len(rawQuery) > 0 {
 		queryParams = strings.Split(rawQuery, "&")
