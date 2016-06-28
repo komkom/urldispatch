@@ -3,7 +3,6 @@ package urldispatch
 import (
 	"fmt"
 	"net/url"
-	"reflect"
 	"testing"
 )
 
@@ -30,12 +29,25 @@ func TestTest(t *testing.T) {
 
 	units := []tunit{
 		tunit{
-			dispatch: "start/test/:name1/:name2/xx/:k1/:key.../part3/:v1?qk",
-			tus: []turl{turl{
-				url:              "https://test.com/start/test/value/xx/vk1/1/2/3/4/5/part3/somevalue?qk=1111",
-				expectedParams:   map[string]string{"name1": "value", "k1": "vk1", "v1": "somevalue", "qk": "1111"},
-				unexpectedParams: []string{"name2"},
-				expectedArrays:   map[string][]string{"key": []string{"1", "2", "3", "4", "5"}}}}},
+			dispatch: "start/test/:name1/:name2/xx/:k1/:key.../part3/:v1?qk&qk2",
+			tus: []turl{
+				turl{
+					url:              "https://test.com/start/test/value/xx/vk1/1/2/3/4/5/part3/somevalue?qk=1111",
+					expectedParams:   map[string]string{"name1": "value", "k1": "vk1", "v1": "somevalue", "qk": "1111"},
+					unexpectedParams: []string{"name2", "qk2"},
+					expectedArrays:   map[string][]string{"key": []string{"1", "2", "3", "4", "5"}}},
+				turl{
+					url:              "https://test.com/start/test/value/xx/vk1/part3/somevalue?qk=1111&qk2=2222",
+					expectedParams:   map[string]string{"name1": "value", "k1": "vk1", "v1": "somevalue", "qk": "1111", "qk2": "2222"},
+					unexpectedParams: []string{"name2"},
+					expectedArrays:   map[string][]string{"key": []string{}}},
+				turl{
+					url:              "https://test.com/start/test/value/xx/vk1/tt/part3?qk=1111",
+					expectedParams:   map[string]string{"name1": "value", "k1": "vk1", "qk": "1111"},
+					unexpectedParams: []string{"name2", "v1"},
+					expectedArrays:   map[string][]string{"key": []string{"tt"}}},
+			},
+		},
 		tunit{
 			dispatch: "end/test/:name1/:name2/:keys...",
 			tus: []turl{
@@ -58,6 +70,13 @@ func TestTest(t *testing.T) {
 			tus: []turl{
 				turl{
 					url: "https://test.com/somepath2/folder1/folder2",
+				}}},
+		tunit{
+			dispatch: "dispatch/:ar1.../folder1/folder2",
+			tus: []turl{
+				turl{
+					url:            "https://test.com/dispatch/1/2/3/4/folder1/folder2",
+					expectedArrays: map[string][]string{"ar1": []string{"1", "2", "3", "4"}},
 				}}},
 	}
 
@@ -121,10 +140,24 @@ func TestTest(t *testing.T) {
 					t.Fatal(err.Error())
 				}
 
-				if !reflect.DeepEqual(a, arr) {
-					t.Fatal("wrong array")
+				if !compareStringSlices(a, arr) {
+					t.Fatal(fmt.Sprintf("wrong array %v,%v", arr, a))
 				}
 			}
 		}
 	}
+}
+
+func compareStringSlices(left []string, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+
+	for i, l := range left {
+		if l != right[i] {
+			return false
+		}
+	}
+
+	return true
 }

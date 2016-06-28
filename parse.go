@@ -19,6 +19,14 @@ func (i indexes) incrLast() error {
 	return errors.New("indexes have 0 length.")
 }
 
+func (i indexes) last() (index, error) {
+	if len(i) == 0 {
+		return 0, errors.New("zero elements.")
+	}
+
+	return i[len(i)-1], nil
+}
+
 func (p params) eq(other params) bool {
 	if len(p) != len(other) {
 		return false
@@ -134,6 +142,15 @@ func parse(path string, rawQuery string, tag int) ([]segment, error) {
 			amap.arrays = append(amap.arrays, pn)
 			amap.asections.incrLast()
 
+			l, err := amap.asections.last()
+			if err != nil {
+				return nil, err
+			}
+
+			if l > 1 {
+				return nil, errors.New("multiple arrays in one segment.")
+			}
+
 		} else if strings.HasPrefix(item, ":") {
 
 			if cseg == nil {
@@ -150,6 +167,16 @@ func parse(path string, rawQuery string, tag int) ([]segment, error) {
 			err = amap.psections.incrLast()
 			if err != nil {
 				return nil, err
+			}
+
+			// make sure an array has not already been added.
+			l, err := amap.asections.last()
+			if err != nil {
+				return nil, err
+			}
+
+			if l == 1 {
+				return nil, errors.New("an array has to be the last param on a segment.")
 			}
 
 		} else {
