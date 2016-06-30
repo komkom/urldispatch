@@ -2,6 +2,7 @@ package urldispatch
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -61,6 +62,7 @@ func (d *Dispatcher) addRoute(segs []segment) error {
 			}
 		}
 
+		// check if the segments are addable
 		for _, seg := range d.segments {
 			if seg.value == segs[0].value {
 
@@ -69,7 +71,19 @@ func (d *Dispatcher) addRoute(segs []segment) error {
 					return err
 				}
 
-				return seg.addable2(segs[1:], refmap, 0)
+				err = seg.addable2(segs[1:], refmap, 0)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		// insert the segments.
+		for i, seg := range d.segments {
+			if seg.value == segs[0].value {
+
+				d.segments[i].insertSegments(segs[1:])
+				return nil
 			}
 		}
 
@@ -108,7 +122,6 @@ func (s segment) dispatchPath(pathSegs []string, ar args2, idx int) (Outargs, er
 		ps := pathSegs[0]
 
 		for _, cs := range s.next {
-
 			if cs.value == ps {
 
 				pCount := cs.amap.psections[idx]
@@ -138,7 +151,7 @@ func (s segment) dispatchPath(pathSegs []string, ar args2, idx int) (Outargs, er
 			ar.appendArrayValue(ps)
 			pathSegs = pathSegs[1:]
 		} else {
-			return Outargs{}, errors.New("param overflow with segment:" + ps)
+			return Outargs{}, errors.New("param overflow with segment:" + ps + fmt.Sprintf("idx:%v", idx))
 		}
 	}
 

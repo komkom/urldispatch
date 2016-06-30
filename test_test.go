@@ -72,6 +72,13 @@ func TestTest(t *testing.T) {
 					url: "https://test.com/somepath2/folder1/folder2",
 				}}},
 		tunit{
+			dispatch: "somepath2/folder2/:p1",
+			tus: []turl{
+				turl{
+					url:            "https://test.com/somepath2/folder2/v1",
+					expectedParams: map[string]string{"p1": "v1"},
+				}}},
+		tunit{
 			dispatch: "dispatch/:ar1.../folder1/folder2",
 			tus: []turl{
 				turl{

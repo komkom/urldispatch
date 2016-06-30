@@ -15,6 +15,10 @@ type Outargs struct {
 	ar   args2
 }
 
+func (o Outargs) Tag() int {
+	return o.amap.tag
+}
+
 func (o Outargs) ParamWithName(name string) (string, error) {
 	idx := 0
 	pIdx := 0
