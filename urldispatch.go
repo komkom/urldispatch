@@ -71,6 +71,14 @@ func (d *Dispatcher) addRoute(segs []segment) error {
 					return err
 				}
 
+				if len(segs) < 2 {
+					return errors.New(`partial route 1`)
+				}
+
+				if len(seg.next) == 0 {
+					return errors.New(`partial route detected 1`)
+				}
+
 				err = seg.addable2(segs[1:], refmap, 0)
 				if err != nil {
 					return err
@@ -200,6 +208,14 @@ func (s segment) addable2(segs []segment, amap argsMap, index int) error {
 				err := cs.compareParams(amap, index)
 				if err != nil {
 					return err
+				}
+
+				if len(segs) < 2 {
+					return errors.New(`partial route`)
+				}
+
+				if len(cs.next) == 0 {
+					return errors.New(`partial route detected`)
 				}
 
 				return cs.addable2(segs[1:], amap, index+1)
