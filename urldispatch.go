@@ -243,10 +243,10 @@ func (s *segment) insertSegments(segments []segment) {
 	if len(segments) > 0 {
 		nseg := segments[0]
 
-		for _, cs := range s.next {
+		for i, cs := range s.next {
 			if cs.value == nseg.value {
 
-				cs.insertSegments(segments[1:])
+				s.next[i].insertSegments(segments[1:])
 				return
 			}
 		}
