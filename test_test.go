@@ -29,6 +29,13 @@ func TestTest(t *testing.T) {
 
 	units := []tunit{
 		tunit{
+			dispatch: "somepath2/folder2/:p1",
+			tus: []turl{
+				turl{
+					url:            "https://test.com/somepath2/folder2/v1",
+					expectedParams: map[string]string{"p1": "v1"},
+				}}},
+		tunit{
 			dispatch: "start/test/:name1/:name2/xx/:k1/:key.../part3/:v1?qk&qk2",
 			tus: []turl{
 				turl{
@@ -72,13 +79,6 @@ func TestTest(t *testing.T) {
 					url: "https://test.com/somepath2/folder1/folder2",
 				}}},
 		tunit{
-			dispatch: "somepath2/folder2/:p1",
-			tus: []turl{
-				turl{
-					url:            "https://test.com/somepath2/folder2/v1",
-					expectedParams: map[string]string{"p1": "v1"},
-				}}},
-		tunit{
 			dispatch: "dispatch/:ar1.../folder1/folder2",
 			tus: []turl{
 				turl{
@@ -105,6 +105,8 @@ func TestTest(t *testing.T) {
 		fmt.Printf("tunit %v\n", i)
 
 		for _, tu := range u.tus {
+
+			fmt.Printf("dispatch %v\n", tu.url)
 
 			u, err := url.Parse(tu.url)
 			if err != nil {

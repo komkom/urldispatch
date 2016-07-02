@@ -63,42 +63,13 @@ func (d *Dispatcher) addRoute(segs []segment) error {
 		}
 
 		// check if the segments are addable
-		for _, seg := range d.segments {
-			if seg.value == segs[0].value {
-
-				err := seg.compareParams(refmap, 0)
-				if err != nil {
-					return err
-				}
-
-				if len(segs) < 2 {
-					return errors.New(`partial route 1`)
-				}
-
-				if len(seg.next) == 0 {
-					return errors.New(`partial route detected 1`)
-				}
-
-				err = seg.addable2(segs[1:], refmap, 0)
-				if err != nil {
-					return err
-				}
-			}
+		err := d.root.addable2(segs, refmap, 0)
+		if err != nil {
+			return err
 		}
 
 		// insert the segments.
-		for i, seg := range d.segments {
-			if seg.value == segs[0].value {
-
-				d.segments[i].insertSegments(segs[1:])
-				return nil
-			}
-		}
-
-		// insert the segments
-		cseg.insertSegments(segs[1:])
-
-		d.segments = append(d.segments, cseg)
+		d.root.insertSegments(segs)
 	}
 
 	return nil
@@ -109,14 +80,7 @@ func (d Dispatcher) dispatchPath(pathSegs []string) (Outargs, error) {
 	ar := args2{}
 
 	if len(pathSegs) > 0 {
-		pathSeg := pathSegs[0]
-
-		for _, s := range d.segments {
-			if s.value == pathSeg {
-				ar.nextArray()
-				return s.dispatchPath(pathSegs[1:], ar, 0)
-			}
-		}
+		return d.root.dispatchPath(pathSegs, ar, -1)
 	}
 
 	return Outargs{}, errors.New("nothing to dispatch.")
@@ -132,14 +96,22 @@ func (s segment) dispatchPath(pathSegs []string, ar args2, idx int) (Outargs, er
 		for _, cs := range s.next {
 			if cs.value == ps {
 
-				pCount := cs.amap.psections[idx]
+				if idx > -1 {
+					pCount := cs.amap.psections[idx]
 
-				// fix the array args
-				ar.addNullPtrParams(pCount - pIdx)
-				ar.nextArray()
+					// fix the array args
+					ar.addNullPtrParams(pCount - pIdx)
+				}
 
+				if cs.amap.asections[idx+1] > 0 {
+					ar.nextArray()
+				}
 				return cs.dispatchPath(pathSegs[1:], ar, idx+1)
 			}
+		}
+
+		if idx == -1 {
+			return Outargs{}, errors.New("nothing to dispatch for " + ps)
 		}
 
 		// if there is room for another param.
@@ -210,12 +182,15 @@ func (s segment) addable2(segs []segment, amap argsMap, index int) error {
 					return err
 				}
 
-				if len(segs) < 2 {
-					return errors.New(`partial route`)
-				}
+				// only check if the segment is not the root segment.
+				if index != 0 {
+					if len(segs) < 2 {
+						return errors.New(`partial route`)
+					}
 
-				if len(cs.next) == 0 {
-					return errors.New(`partial route detected`)
+					if len(cs.next) == 0 {
+						return errors.New(`partial route detected`)
+					}
 				}
 
 				return cs.addable2(segs[1:], amap, index+1)

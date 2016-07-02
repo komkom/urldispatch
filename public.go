@@ -7,7 +7,7 @@ import (
 )
 
 type Dispatcher struct {
-	segments []segment
+	root segment
 }
 
 type Outargs struct {
@@ -50,21 +50,20 @@ func (o Outargs) ParamWithName(name string) (string, error) {
 }
 
 func (o Outargs) ArrayWithName(name string) ([]string, error) {
+
 	idx := 0
-	pIdx := 0
 
-	for pIdx < len(o.amap.asections) {
+	for idx < len(o.ar.asection) {
 
-		if o.amap.asections[pIdx] != 0 {
-
-			if o.amap.arrays[idx] == name {
-
-				return o.Array(pIdx)
-			}
-			idx += 1
+		if len(o.amap.arrays) <= idx {
+			return nil, errors.New("asections not matching with arrays.")
 		}
 
-		pIdx += 1
+		if o.amap.arrays[idx] == name {
+			return o.Array(idx)
+		}
+		idx += 1
+
 	}
 
 	return nil, errors.New("paramname not found.")
