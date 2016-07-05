@@ -131,7 +131,7 @@ func (s segment) dispatchPath(pathSegs []string, ar args2, idx int) (Outargs, er
 			ar.appendArrayValue(ps)
 			pathSegs = pathSegs[1:]
 		} else {
-			return Outargs{}, errors.New("param overflow with segment:" + ps + fmt.Sprintf("idx:%v", idx))
+			return Outargs{}, errors.New("param overflow with segment:" + ps + fmt.Sprintf(" idx:%v", idx))
 		}
 	}
 
