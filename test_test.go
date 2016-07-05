@@ -21,8 +21,9 @@ type turl struct {
 }
 
 type tunit struct {
-	dispatch string
-	tus      []turl
+	dispatch        string
+	shouldFailOnAdd bool
+	tus             []turl
 }
 
 func TestTest(t *testing.T) {
@@ -79,6 +80,15 @@ func TestTest(t *testing.T) {
 					url: "https://test.com/somepath2/folder1/folder2",
 				}}},
 		tunit{
+			dispatch:        "somepath2/folder1",
+			shouldFailOnAdd: true},
+		tunit{
+			dispatch:        "somepath2/folder1/folder2/folder3",
+			shouldFailOnAdd: true},
+		tunit{
+			dispatch:        "somepath2/folder1/folder2/:arr...",
+			shouldFailOnAdd: true},
+		tunit{
 			dispatch: "dispatch/:ar1.../folder1/folder2",
 			tus: []turl{
 				turl{
@@ -97,7 +107,10 @@ func TestTest(t *testing.T) {
 
 		err = d.AddRoute(du, i)
 		if err != nil {
-			panic(err)
+			if !u.shouldFailOnAdd {
+				panic(err)
+			}
+			continue
 		}
 	}
 
