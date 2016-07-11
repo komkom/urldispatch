@@ -109,6 +109,11 @@ func (d *Dispatcher) Dispatch(dispatch *url.URL) (Outargs, error) {
 	dispPath := dispatch.Path
 	dispQuery := dispatch.RawQuery
 
+	return d.DispatchPath(dispPath, dispQuery)
+}
+
+func (d *Dispatcher) DispatchPath(dispPath string, dispQuery string) (Outargs, error) {
+
 	dispPath = removeLeadingAndTrailingSlashes(dispPath)
 
 	oa, err := d.dispatchPath(strings.Split(dispPath, "/"))
@@ -126,6 +131,7 @@ func (d *Dispatcher) Dispatch(dispatch *url.URL) (Outargs, error) {
 	}
 
 	return oa, nil
+
 }
 
 func (d *Dispatcher) AddRoute(route *url.URL, tag int) error {
